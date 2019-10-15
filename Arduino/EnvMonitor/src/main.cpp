@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <GyverTM1637.h>
-#include <Wire.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <LiquidCrystal_I2C.h>
@@ -30,7 +29,7 @@
 #define ONE_WIRE_BUS 2 // dstemp
 
 // degree character hex code
-const uint8_t DEGREE_HEX[] {0x0C, 0x12, 0x12, 0x0C, 0x00, 0x00, 0x00, 0x00};
+uint8_t DEGREE_HEX[] {0x0C, 0x12, 0x12, 0x0C, 0x00, 0x00, 0x00, 0x00};
 
 class NTC
 {
@@ -181,9 +180,9 @@ void setup() {
   setLCDBrightness(lcdBright);          // initialize PWM output
   // brightLastPress = millis()
 
-	lcd_display.begin();           // initialize the LCD
-	lcd_display.backlight();       // Turn on the blacklight
-	lcd_display.print("Hello!");   // and print a message.
+	lcd_display.begin(LCD_COLS, LCD_LINES);  // initialize the LCD
+	lcd_display.backlight();                 // Turn on the blacklight
+	lcd_display.print("Hello!");             // and print a message.
 
   pinMode(11, OUTPUT);
   digitalWrite(11, LOW);
