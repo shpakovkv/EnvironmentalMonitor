@@ -177,7 +177,7 @@ def main():
     time0 = time.time()
 
     # print output header
-    sys.stdout.write('{:<15}{:<11}{:<11}\n'.format('Time', 'NTC°', 'Ext.T°'))
+    sys.stdout.write('{:<15}{:<11}{:<11}\n'.format('Time', 'NTC', 'Ext.T'))
 
     # create plot
     plot1 = UpdatablePlot('Int. NTC', 'Ext. DS')
@@ -190,7 +190,7 @@ def main():
             # add new point to file, plot, console
             logger.info('%f %.2f %.2f', time.time() - time0, int_temp, ext_temp)
             plot1.add_point(time.time() - time0, int_temp, ext_temp)
-            sys.stdout.write('\r{:f},   {:.2f}°,   {:.2f}°'.format(time.time() - time0, int_temp, ext_temp))
+            sys.stdout.write('\r{:f},   {:.2f},   {:.2f}'.format(time.time() - time0, int_temp, ext_temp))
             sys.stdout.flush()
             # refresh rate correction
             time.sleep(UPDATE_DELAY)
@@ -198,6 +198,7 @@ def main():
         # turn on arduino standalone monitor mode and close connection
         device_close(sensor)
         # TODO: save plot to file
+        print()
         print("Interrupted by user.")
 
     # TODO: keyboard interrupt handler
