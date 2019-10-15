@@ -28,7 +28,8 @@ class UpdatablePlot:
         # trying to use interactive mode
         plt.ion()
         self.fig = plt.figure()
-        self.axes = self.fig.add_subplot(111)        # TODO: various subplots support
+        self.axes = self.fig.add_subplot(111)
+        # TODO: various subplots support
 
         self.curves = [None] * self.curves_num
         for idx, label in enumerate(labels):
@@ -201,7 +202,6 @@ def main():
         print()
         print("Interrupted by user.")
 
-    # TODO: keyboard interrupt handler
     # try:
     #     check_device(sensor)
     # except Exception:
