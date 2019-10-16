@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <GyverTM1637.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <LiquidCrystal_I2C.h>
@@ -19,14 +18,12 @@
 #define LCD_LINES 2
 #define LCD_COLS 16
 #define LCD_ADDRESS 0x27
-#define LCD_BRIGHT_BUT_PIN 3
-#define LCD_BRIGHT_SET_PIN 6
-
-#define DEBOUNCE_DELAY 20 // milliseconds
+#define LCD_BRIGHT_PIN 6
 
 #define UPDATE_PERIOD 500
 
 #define ONE_WIRE_BUS 2 // dstemp
+#define LED_INDICATOR_PIN 11
 
 // degree character hex code
 uint8_t DEGREE_HEX[] {0x0C, 0x12, 0x12, 0x0C, 0x00, 0x00, 0x00, 0x00};
@@ -142,7 +139,7 @@ class NTC
 
 // function declaration
 void displayLine(LiquidCrystal_I2C display, int lineNumber, String line);
-void setLCDBrightness(unsigned int level, int brightnessPin=LCD_BRIGHT_SET_PIN);
+void setLCDBrightness(unsigned int level, int brightnessPin=LCD_BRIGHT_PIN);
 void printStats(unsigned int rawRead,           // raw value
                 unsigned long long resistance,  // NTC measured resistance [Ohm]
                 double temperature);            // NTC temperature [°C]
@@ -152,10 +149,8 @@ void printAddress(DeviceAddress deviceAddress);
 LiquidCrystal_I2C lcd_display(LCD_ADDRESS, LCD_COLS, LCD_LINES);
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
 
-long brightLastPress = 0;
-bool brightIsPressed = false;
 bool stringComplete = false;
-unsigned int lcdBright = 255;
+unsigned int lcdBright = 150;
 long tempLastReadTime;
 String serialCommand = "";
 int serialLedStatus = LOW;
@@ -175,17 +170,19 @@ NTC NTCSensor(THERM_PIN, THERM_REF_R, THERM_REF_T, THERM_B_COEF, OTHER_R, T_SMOO
 
 void setup() {
   analogReference(EXTERNAL);
-  pinMode(LCD_BRIGHT_BUT_PIN, INPUT);   // buttom input
-  pinMode(LCD_BRIGHT_SET_PIN, OUTPUT);  // PWM output for LCD power
+  pinMode(LCD_BRIGHT_PIN, OUTPUT);  // PWM output for LCD power
   setLCDBrightness(lcdBright);          // initialize PWM output
   // brightLastPress = millis()
 
-	lcd_display.begin(LCD_COLS, LCD_LINES);  // initialize the LCD
-	lcd_display.backlight();                 // Turn on the blacklight
-	lcd_display.print("Hello!");             // and print a message.
+  // initialize the LCD
+  lcd_display.init();
+	lcd_display.backlight();
+  setLCDBrightness(lcdBright);
+	lcd_display.print("Hello!");
 
-  pinMode(11, OUTPUT);
-  digitalWrite(11, LOW);
+  // Led communication indicator
+  pinMode(LED_INDICATOR_PIN, OUTPUT);
+  digitalWrite(LED_INDICATOR_PIN, LOW);
 
   // create degree character
   lcd_display.createChar(DEGREE_CHAR, DEGREE_HEX);
@@ -241,18 +238,6 @@ void loop() {
     displayLine(lcd_display, 1, line);
 
     updateLCD = false;
-  }
-
-  // button press event
-  if (digitalRead(LCD_BRIGHT_BUT_PIN) == HIGH && millis() - brightLastPress > DEBOUNCE_DELAY)
-  {
-    brightIsPressed = true;
-    brightLastPress = millis();
-    lcdBright -= 15;
-    if (lcdBright < 15) lcdBright = 255;
-    setLCDBrightness(lcdBright);
-    Serial.print("Brightness = ");
-    Serial.println(lcdBright);
   }
 
   if (stringComplete)
