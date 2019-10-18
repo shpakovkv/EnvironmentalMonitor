@@ -8,8 +8,8 @@
 #define THERM_PIN A1
 #define THERM_REF_T 25 // T0 [°K]
 #define THERM_REF_R 10000 // R0 [Ohm]
-#define THERM_B_COEF 3950 // B coeficient [°K]
-#define OTHER_R 11110 // [Ohm]
+#define THERM_B_COEF 3435 // B coeficient [°K]
+#define OTHER_R 11100 // [Ohm]
 
 #define T_SMOOTH_READS 5  //
 #define T_SMOOTH_READS_DELAY 10   // delay between reads in milliseconds
@@ -80,13 +80,13 @@ class NTC
       // slow function
       // reads NTC voltage in arduino ADC raw values
       // repeats reads smoothReads times and return average value
-      currentRaw = 0;
+      currentRaw = 0.0;
       for (int i=0; i<smoothReads; i++)
       {
         currentRaw += analogRead(ntcPin);
         delay(smoothDelay);
       }
-      currentRaw /= smoothReads;
+      currentRaw /= float(smoothReads);
       return currentRaw;
     }
 
@@ -131,7 +131,7 @@ class NTC
     int smoothDelay=10;     // delay in milliseconds between reads
 
   public:
-    int currentRaw;
+    double currentRaw;
     double currentResistance;
     double currentTemperature;
 };
