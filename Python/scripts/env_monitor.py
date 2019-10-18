@@ -19,6 +19,17 @@ UPDATE_DELAY = 0.5           # [s]
 
 class UpdatablePlot:
 
+    colors = ['#1f77b4',
+              '#ff7f0e',
+              '#2ca02c',
+              '#d62728',
+              '#9467bd',
+              '#8c564b',
+              '#e377c2',
+              '#7f7f7f',
+              '#bcbd22',
+              '#17becf']
+
     def __init__(self, *labels):
         self.x_data = deque()
         self.y_data = []
@@ -32,11 +43,20 @@ class UpdatablePlot:
         # TODO: various subplots support
 
         self.curves = [None] * self.curves_num
+        assert len(self.labels) < len(UpdatablePlot.colors), \
+            'Too many curves for 1 graph.'
+
         for idx, label in enumerate(labels):
             self.y_data.append(deque())
-            self.curves[idx], = self.axes.plot(self.x_data, self.y_data[idx], label=label)
+            self.curves[idx], = self.axes.plot(self.x_data, 
+                                               self.y_data[idx], 
+                                               color=UpdatablePlot.colors[idx], 
+                                               linestyle='-', 
+                                               label=label)
+            # self.curves[idx], = self.axes.plot(self.x_data, self.y_data[idx], label=label)
         self.axes.set_autoscaley_on(True)
-        self.fig.legend(loc='upper left')
+        # self.fig.legend(loc='upper left')
+        self.fig.legend(self.curves, self.labels, 'upper left')
         self.fig.tight_layout()
 
     def add_point(self, x_val, *y_vals):
@@ -181,7 +201,8 @@ def main():
     sys.stdout.write('{:<15}{:<11}{:<11}\n'.format('Time', 'NTC', 'Ext.T'))
 
     # create plot
-    plot1 = UpdatablePlot('Int. NTC', 'Ext. DS')
+    plot1 = UpdatablePlot('Int. NTC',   # label for 1st curve
+                          'Ext. DS')    # label for 2nd curve
 
     # main loop
     try:
