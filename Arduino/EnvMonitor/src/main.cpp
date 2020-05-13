@@ -2,6 +2,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <LiquidCrystal_I2C.h>
+#include <ADS1115.h>
+#include <I2Cdev.h>
 // #include <string.h>
 
 // pins
@@ -20,34 +22,44 @@
 #define LCD_ADDRESS 0x27
 #define LCD_BRIGHT_PIN 6
 
+#define ADS_ADDR 0x48
+#define ADS_ALRT_PIN 2  // connect ADS1115 Alert/Ready output
+#define ADS_NTC_MUX_CH ADS1115_MUX_P0_NG
+#define ADS_VCC_MUX_CH ADS1115_MUX_P3_NG
+// #define ADS_ALRT_PU  // uncomment if Alert/Ready output is hadwarely pulled-up
+
+
 #define UPDATE_PERIOD 500
 
-#define ONE_WIRE_BUS 2 // dstemp
+#define ONE_WIRE_BUS 5 // dstemp
 #define LED_INDICATOR_PIN 11
 
 // degree character hex code
 uint8_t DEGREE_HEX[] {0x0C, 0x12, 0x12, 0x0C, 0x00, 0x00, 0x00, 0x00};
 
-class NTC
+class NTC_on_ADS
 {
   // HARDWARE:
+  // Connect ADS1115 to I2C interface
+  // TODO: description
   // connect Vcc to external voltage reference pin and set analogReference(EXTERNAL)
   // connect reference resistance to Vcc and NTC thermistor
   // then connect other leg of NTC thermistor to ground
   // then connect middle point (between resistance and NTC) to analog input pin
 
   public:
-    NTC(int analogPin, uint32_t referenceResistance, double referenceTemperature, double coefficientB, uint32_t otherResistance, int smoothReadsNumber=5, int smoothReadsDelay=5)
+    NTC_on_ADS(ADS1115  *adcRef, uint8_t channel, uint8_t refChannel, uint8_t alertReadyPin, uint32_t referenceResistance, double referenceTemperature, double coefficientB, uint32_t otherResistance, uint8_t dataRate=0, uint8_t gain=ADS1115_PGA_6P144)
     {
-      ntcPin = analogPin;
+      adcPnt = adcRef;
+      ntcCh = channel;
+      rate = dataRate;
+      pga_gain = gain;
+      refCh = refChannel;
+      readyPin = alertReadyPin;
       ref_R = referenceResistance;      // reference resistance in Ohms (at reference temperature)
       ref_T = referenceTemperature;     // reference temperature in °C
       coef_B = coefficientB;            // NTC thermistor B coefficient for Steinhart-Hart equation
       other_R = otherResistance;        // the other resistance in the NTC circuit
-      smoothReads = smoothReadsNumber;  // number of read operations to average
-      smoothDelay = smoothReadsDelay;   // delay in milliseconds between reads
-      pinMode(analogPin, INPUT);
-      // TODO: check analog reference
     }
 
     // ~NTC()
@@ -55,54 +67,92 @@ class NTC
     //   delete samples;
     // }
 
+    void init()
+    {
+      // initialize ADS1115 16 bit A/D chip
+      adcPnt->initialize(); 
+
+      // single shot sampling
+      adcPnt->setMode(ADS1115_MODE_SINGLESHOT);
+      
+      // set data rate as slow as possible for low noise 
+      adcPnt->setRate(rate);
+        
+      // Note that any analog input must be higher than –0.3V and less than VDD +0.3
+      adcPnt->setGain(pga_gain);
+
+      // turn on ready pin functionality
+      pinMode(readyPin, INPUT_PULLUP);
+      adcPnt->setConversionReadyPinMode();
+
+      pinMode(THERM_PIN, INPUT); // DEBUG BREADBOARD SCHEME
+
+      // TODO: ADS connection check
+    }
+
     double Read()
     {
       // slow function
       // reads and returns NTC temperature in °C
-      ReadRawAverage();
-      ResistanceFromRaw(currentRaw);
-      return TempFromResistance(currentResistance);
+
+      currentVCC = ReadVoltage(refCh);
+      currentVoltage = ReadVoltage(ntcCh);
+      return TempFromVoltage();
+    }
+
+    float ReadVoltage(uint8_t channel)
+    {
+      if (adcPnt->getGain() < pga_gain)
+      {
+        // if new gain is higher
+        // switch physical ads channel first
+        // then increase gain
+        adcPnt->setMultiplexer(channel);
+        adcPnt->setGain(pga_gain);
+      }
+      else
+      {
+        // if new gain is lower
+        // decrease gain first
+        // then switch physical ads channel
+        adcPnt->setGain(pga_gain);
+        adcPnt->setMultiplexer(channel);
+      }
+
+      // start measurements
+      adcPnt->triggerConversion();
+      // wait for measurement 
+      if (waitReadyPin())
+      {
+        return adcPnt->getMilliVolts(false);
+      }
+      // timeout
+      // TODO: timeout value handling
+      return -999;
+       
+    }
+
+    uint8_t waitReadyPin()
+    {
+      for (uint32_t i = 0; i<100000; i++) if (!digitalRead(readyPin)) return 1;
+      return 0;
     }
 
     void PrintStats()
     {
       // prints to serial:
       // raw, resistance, temperature
-      String message = String(currentRaw);
-      message += ",  " + String(currentResistance) + " Ohm";
+      String message = String(0);
+      message += ",  " + String(currentVoltage) + " mV";
       message += ",  " + String(currentTemperature);
       message += " " + String('\xB0') + "C";
       Serial.println(message);
     }
 
-    double ReadRawAverage()
+    double TempFromVoltage()
     {
-      // slow function
-      // reads NTC voltage in arduino ADC raw values
-      // repeats reads smoothReads times and return average value
-      currentRaw = 0.0;
-      for (int i=0; i<smoothReads; i++)
-      {
-        currentRaw += analogRead(ntcPin);
-        delay(smoothDelay);
-      }
-      currentRaw /= float(smoothReads);
-      return currentRaw;
-    }
-
-    double ResistanceFromRaw(double raw)
-    {
-      // calculates NTC resistance from arduino ADC raw value
-      currentResistance = 1023.0 / raw - 1.0;
-      currentResistance = other_R / currentResistance;
-      // currentResistance = raw * other_R;
-      // currentResistance /= (1023 - raw);
-      return currentResistance;
-    }
-
-    double TempFromResistance(double resistance)
-    {
-      // calculates NTC temperature from measured resistance
+      // calculates NTC temperature from measured re
+      double resistance = currentVoltage * OTHER_R / (currentVCC - currentVoltage);
       //double temp = 1.0/(1/To + log(R/Ro)/B);
       currentTemperature = resistance / ref_R;          // R/Ro
       currentTemperature = log(currentTemperature);     // ln(R/Ro)
@@ -122,7 +172,13 @@ class NTC
     }
 
   private:
-    int ntcPin;                // analog pin
+    ADS1115 *adcPnt;
+    uint8_t ntcCh;             // ADS channel number to use
+    uint8_t rate;           // ADS data rate
+    uint8_t pga_gain; 
+    uint8_t refCh;          // ADS channel with ref voltage (Vcc)
+    uint8_t readyPin;
+
     uint32_t ref_R;         // reference resistance in Ohms (at reference temperature)
     double ref_T;           // reference temperature in °C
     double coef_B;          // NTC thermistor B coefficient for Steinhart-Hart equation
@@ -131,8 +187,9 @@ class NTC
     int smoothDelay=10;     // delay in milliseconds between reads
 
   public:
-    double currentRaw;
-    double currentResistance;
+    // float currentRaw;
+    double currentVCC;
+    double currentVoltage;
     double currentTemperature;
 };
 
@@ -165,11 +222,19 @@ DallasTemperature DSSensors(&oneWire);
 
 // arrays to hold device address
 DeviceAddress DSThermometer;
+ADS1115 ads1(ADS1115_DEFAULT_ADDRESS);
 
-NTC NTCSensor(THERM_PIN, THERM_REF_R, THERM_REF_T, THERM_B_COEF, OTHER_R, T_SMOOTH_READS, T_SMOOTH_READS_DELAY);
+NTC_on_ADS NTCSensor(&ads1, ADS_NTC_MUX_CH, ADS_VCC_MUX_CH, ADS_ALRT_PIN, THERM_REF_R, THERM_REF_T, THERM_B_COEF, OTHER_R);
+// NTC NTCSensor2(THERM_PIN, THERM_REF_R, THERM_REF_T, THERM_B_COEF, OTHER_R, T_SMOOTH_READS, T_SMOOTH_READS_DELAY);
 
 void setup() {
-  analogReference(EXTERNAL);
+  serialCommand.reserve(100);
+  Serial.begin(9600);
+  delay(100);
+
+  NTCSensor.init();
+
+  // analogReference(EXTERNAL);
   pinMode(LCD_BRIGHT_PIN, OUTPUT);  // PWM output for LCD power
   setLCDBrightness(lcdBright);          // initialize PWM output
   // brightLastPress = millis()
@@ -186,10 +251,6 @@ void setup() {
 
   // create degree character
   lcd_display.createChar(DEGREE_CHAR, DEGREE_HEX);
-
-  serialCommand.reserve(100);
-  Serial.begin(9600);
-  delay(100);
 
   DSSensors.begin();
 
@@ -265,6 +326,8 @@ void loop() {
     stringComplete = false;
     serialLedStatus = LOW;
   }
+
+
 
   digitalWrite(11, serialLedStatus);
 }

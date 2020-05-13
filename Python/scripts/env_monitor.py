@@ -139,7 +139,7 @@ def device_init(ser_dev):
     time.sleep(1)
     response = ser_dev.readline()
     print("Device ID = '{}'".format(response.strip()))
-    assert response.startswith("Arduino"), "Unsupported device!"
+    # assert response.startswith("Arduino"), "Unsupported device!"
     ser_dev.write(b'EXT!')
     time.sleep(1)
 
